@@ -82,6 +82,7 @@ void loop() {
     Serial.print(",");
     Serial.print("MLS:");
     Serial.print(motor_left_setpoint_speed);
+    Serial.print(",");
 
     Serial.print("PR:");
     Serial.print(pulses_right);
