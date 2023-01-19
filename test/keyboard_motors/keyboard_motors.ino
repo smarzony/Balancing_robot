@@ -10,6 +10,8 @@ int E2 = 6;  //M2 Speed Control
 int M1 = 4;  //M1 Direction Control
 int M2 = 7;  //M1 Direction Control
 
+int motors_power = 0;
+
 void setup() {
   pinMode(13, OUTPUT);  //LED13 is used for mesure the button state.
   pinMode(E1, OUTPUT);
@@ -24,6 +26,18 @@ void loop() {
   digitalWrite(13, LOW);
   key = get_key(adc_key_in);  //Call the button judging function.
 
+  if (motors_power > 0) {
+    advance(motors_power, motors_power);
+  }
+
+  else if (motors_power < 0) {
+    back_off(-motors_power, -motors_power);
+  }
+
+  else {
+    stop();
+  }
+
   if (key != oldkey) {  // Get the button pressed
     delay(50);
     adc_key_in = analogRead(7);
@@ -34,16 +48,24 @@ void loop() {
         digitalWrite(13, HIGH);
         switch (key) {  // Send messages accordingly.
           case 0:
-            Serial.println("S1 OK");
-            advance(100, 100);
+            motors_power--;
+            Serial.print("Power--:");
+            Serial.println(motors_power);
+
+            // advance(100, 100);
             break;
           case 1:
-            Serial.println("S2 OK");
-            turn_L(100, 100);
+            Serial.println("Power 0");
+            motors_power = 0;
+            // Serial.println("S2 OK");
+            // turn_L(100, 100);
             break;
           case 2:
-            Serial.println("S3 OK");
-            back_off(100, 100);
+            Serial.print("Power++:");
+            Serial.println(motors_power);
+            motors_power++;
+            // Serial.println("S3 OK");
+            // back_off(100, 100);
             break;
           case 3:
             turn_R(100, 100);
@@ -56,10 +78,10 @@ void loop() {
       }
     }
   }
-  else
-  {
-    stop();
-  }
+  // else
+  // {
+  //   // stop();
+  // }
   delay(100);
 }
 

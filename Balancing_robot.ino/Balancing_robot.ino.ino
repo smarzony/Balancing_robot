@@ -14,16 +14,22 @@
 #define Motor_R_PWM_pin 6
 #define Motor_R_DIR_pin 7
 
+#define MOTORS_DEAD_ZONE 40
+
+#define MOTORS_MAX_PWM (255 - MOTORS_DEAD_ZONE)
+
 #define GYRO_INTERVAL 1
 #define SERIAL_INTERVAL 20
 
-#define ANGLE_CENTER -4.5
-#define ANGLE_BALANCE_SPAN 14.0
+#define ANGLE_CENTER -3.5
+#define ANGLE_BALANCE_SPAN 16.0
 
 #define PID_BALANCING_SAMPLE_TIME_MS 50
 
 #define PID_MOTORS_SAMPLE_TIME_MS 30
-#define SPEED_SETPOINT_LIMIT 4*PID_MOTORS_SAMPLE_TIME_MS
+#define SPEED_SETPOINT_LIMIT (4 * PID_MOTORS_SAMPLE_TIME_MS)
+
+
 
 bool encoder_L_PinALast, encoder_R_PinALast;
 double pulses_left, pulses_right, abs_pulses_left;  //the number of the pulses
@@ -52,9 +58,9 @@ bool motor_test_run = false;
 double Setpoint_angle, Input_angle, Output_motor_speed;
 
 
-double Kp_balancing = 10,
-       Ki_balancing = 30,
-       Kd_balancing = 2;
+double Kp_balancing = 1,
+       Ki_balancing = 100,
+       Kd_balancing = 1;
 
 double Kp_motors = 5,
        Ki_motors = 8,
@@ -63,8 +69,9 @@ double Kp_motors = 5,
 PID motor_right_pid(&pulses_right, &motor_right_pwm, &motor_right_setpoint_speed, Kp_motors, Ki_motors, Kd_motors, REVERSE);
 PID motor_left_pid(&pulses_left, &motor_left_pwm, &motor_left_setpoint_speed, Kp_motors, Ki_motors, Kd_motors, REVERSE);
 
-
 PID balancePID(&Input_angle, &Output_motor_speed, &Setpoint_angle, Kp_balancing, Ki_balancing, Kd_balancing, DIRECT);
+
+// PID speedPID()
 int u;
 
 // GYRO & KALMAN
@@ -108,20 +115,20 @@ void setup() {
   motor_right_setpoint_speed = 0;
   motor_left_setpoint_speed = 0;  //Set the output value of the PID
 
-  motor_right_pid.SetMode(AUTOMATIC);              //PID is set to automatic mode
+  motor_right_pid.SetMode(AUTOMATIC);                        //PID is set to automatic mode
   motor_right_pid.SetSampleTime(PID_MOTORS_SAMPLE_TIME_MS);  //Set PID sampling frequency is 100ms
-  motor_right_pid.SetOutputLimits(-255, 255);
+  motor_right_pid.SetOutputLimits(-MOTORS_MAX_PWM, MOTORS_MAX_PWM);
 
-  motor_left_pid.SetMode(AUTOMATIC);              //PID is set to automatic mode
+  motor_left_pid.SetMode(AUTOMATIC);                        //PID is set to automatic mode
   motor_left_pid.SetSampleTime(PID_MOTORS_SAMPLE_TIME_MS);  //Set PID sampling frequency is 100ms
-  motor_left_pid.SetOutputLimits(-255, 255);
+  motor_left_pid.SetOutputLimits(-MOTORS_MAX_PWM, MOTORS_MAX_PWM);
 
   encoder_left_init();   //Initialize the module
   encoder_right_init();  //Initialize the module
 
-  balancePID.SetMode(AUTOMATIC);              //PID is set to automatic mode
+  balancePID.SetMode(AUTOMATIC);                           //PID is set to automatic mode
   balancePID.SetSampleTime(PID_BALANCING_SAMPLE_TIME_MS);  //Set PID sampling frequency is 100ms
-  balancePID.SetOutputLimits(-255, 255);
+  balancePID.SetOutputLimits(-150, 150);
 }
 
 void loop() {
@@ -139,26 +146,22 @@ void loop() {
     pulses_left = 0;
   }  //PID conversion is complete and returns 1
 
-  motor_left_go();   //Motor Forward
-  motor_right_go();  //Motor Forward
 
-  if (kalPitch < ANGLE_CENTER - ANGLE_BALANCE_SPAN || kalPitch > ANGLE_CENTER + ANGLE_BALANCE_SPAN)
-  {
+
+  if (kalPitch < ANGLE_CENTER - ANGLE_BALANCE_SPAN || kalPitch > ANGLE_CENTER + ANGLE_BALANCE_SPAN) {
     enable_balancing = false;
   }
 
-  if (enable_balancing)
-  {
+  if (enable_balancing) {
     Setpoint_angle = ANGLE_CENTER;
     Input_angle = kalPitch;
     motor_right_setpoint_speed = Output_motor_speed;
     motor_left_setpoint_speed = Output_motor_speed;
     balancePID.Compute();
-  }
-  else
-  {
-    motor_right_setpoint_speed = 0;
-    motor_left_setpoint_speed = 0;
+    motor_left_go();   //Motor Forward
+    motor_right_go();  //Motor Forward
+  } else {
+    motors_stop();
   }
 
   if (now - serial_timer > SERIAL_INTERVAL) {
@@ -238,10 +241,10 @@ void motor_right_go()  //Motor Forward
 {
   if (motor_right_pwm > 0) {
     digitalWrite(Motor_R_DIR_pin, LOW);
-    analogWrite(Motor_R_PWM_pin, (uint8_t)motor_right_pwm);
+    analogWrite(Motor_R_PWM_pin, (uint8_t)motor_right_pwm + MOTORS_DEAD_ZONE);
   } else {
     digitalWrite(Motor_R_DIR_pin, HIGH);
-    analogWrite(Motor_R_PWM_pin, (uint8_t)abs(motor_right_pwm));
+    analogWrite(Motor_R_PWM_pin, (uint8_t)abs(motor_right_pwm) + MOTORS_DEAD_ZONE);
   }
 }
 
@@ -249,11 +252,16 @@ void motor_left_go()  //Motor Forward
 {
   if (motor_left_pwm > 0) {
     digitalWrite(Motor_L_DIR_pin, LOW);
-    analogWrite(Motor_L_PWM_pin, motor_left_pwm);
+    analogWrite(Motor_L_PWM_pin, motor_left_pwm + MOTORS_DEAD_ZONE);
   } else {
     digitalWrite(Motor_L_DIR_pin, HIGH);
-    analogWrite(Motor_L_PWM_pin, abs(motor_left_pwm));
+    analogWrite(Motor_L_PWM_pin, abs(motor_left_pwm) + MOTORS_DEAD_ZONE);
   }
+}
+
+void motors_stop() {
+  analogWrite(Motor_L_PWM_pin, 0);
+  analogWrite(Motor_R_PWM_pin, 0);
 }
 
 void keyboard_read() {
