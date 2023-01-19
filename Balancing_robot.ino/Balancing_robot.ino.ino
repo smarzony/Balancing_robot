@@ -2,6 +2,15 @@
 #include <MPU6050.h>
 #include <KalmanFilter.h>
 #include <PID_v1.h>
+#include <EEPROM.h>
+#include <CommandParser.h>  // https://github.com/Uberi/Arduino-CommandParser
+
+#define DOUBLE_SIZEOF 4
+
+#define ADDR_P 0
+#define ADDR_I (DOUBLE_SIZEOF * 1)
+#define ADDR_D (DOUBLE_SIZEOF * 2)
+#define ADDR_ANGLE (DOUBLE_SIZEOF * 3)
 
 #define encoder_L_pinA 2  //A pin -> the interrupt pin 0
 #define encoder_L_pinB 8  //B pin -> the digital pin 3
@@ -21,7 +30,6 @@
 #define GYRO_INTERVAL 1
 #define SERIAL_INTERVAL 20
 
-#define ANGLE_CENTER -3.5
 #define ANGLE_BALANCE_SPAN 16.0
 
 #define PID_BALANCING_SAMPLE_TIME_MS 50
@@ -30,9 +38,12 @@
 #define SPEED_SETPOINT_LIMIT (4 * PID_MOTORS_SAMPLE_TIME_MS)
 
 
+typedef CommandParser<> MyCommandParser;
+
+MyCommandParser parser;
 
 bool encoder_L_PinALast, encoder_R_PinALast;
-double pulses_left, pulses_right, abs_pulses_left;  //the number of the pulses
+double pulses_left, pulses_right;  //the number of the pulses
 bool dir_left, dir_right;                           //the rotation dir_left
 bool motor_left_pid_ready, motor_right_pid_ready;
 
@@ -43,20 +54,18 @@ double motor_right_pwm;  //Power supplied to the motor PWM value.
 double motor_right_setpoint_speed;
 
 // KEYBOARD CONTROL
-int adc_key_val[5] = { 50, 200, 400, 600, 800 };
-int NUM_KEYS = 5;
-int adc_key_in;
-int key = -1;
-int oldkey = -1;
+uint16_t adc_key_val[5] = { 50, 200, 400, 600, 800 };
+int8_t NUM_KEYS = 5;
+int8_t adc_key_in;
+int8_t key = -1;
+int8_t oldkey = -1;
 
 bool enable_balancing = false;
-bool disable_serial = false;
+bool disable_serial = true;
 bool motor_test_run = false;
-
 
 // PID
 double Setpoint_angle, Input_angle, Output_motor_speed;
-
 
 double Kp_balancing = 1,
        Ki_balancing = 100,
@@ -70,9 +79,6 @@ PID motor_right_pid(&pulses_right, &motor_right_pwm, &motor_right_setpoint_speed
 PID motor_left_pid(&pulses_left, &motor_left_pwm, &motor_left_setpoint_speed, Kp_motors, Ki_motors, Kd_motors, REVERSE);
 
 PID balancePID(&Input_angle, &Output_motor_speed, &Setpoint_angle, Kp_balancing, Ki_balancing, Kd_balancing, DIRECT);
-
-// PID speedPID()
-int u;
 
 // GYRO & KALMAN
 MPU6050 mpu;
@@ -90,11 +96,23 @@ float kalPitch = 0;
 float kalRoll = 0;
 
 
-unsigned long long now, gyro_timer, serial_timer;
+unsigned long now, gyro_timer, serial_timer;
 
 
 void setup() {
   Serial.begin(115200);
+  while (!Serial);
+  parser.registerCommand("P", "d", &cmd_P);
+  parser.registerCommand("I", "d", &cmd_I);  
+  parser.registerCommand("D", "d", &cmd_D);
+  parser.registerCommand("ANGLE", "d", &cmd_ANGLE);
+  parser.registerCommand("PRINT", "", &cmd_print);
+  parser.registerCommand("SERIAL", "", &cmd_switch_serial);
+
+  EEPROM.get(ADDR_P, Kp_balancing);
+  EEPROM.get(ADDR_I, Ki_balancing);
+  EEPROM.get(ADDR_D, Kd_balancing);
+  EEPROM.get(ADDR_ANGLE, Setpoint_angle);
 
   // GYRO
   // Inicjalizacja MPU6050
@@ -134,6 +152,7 @@ void setup() {
 void loop() {
   now = millis();
   keyboard_read();
+  CommandsSerial();
   if (now - gyro_timer > GYRO_INTERVAL) {
     gyro_timer = now;
     read_gyro_kalman();
@@ -146,14 +165,11 @@ void loop() {
     pulses_left = 0;
   }  //PID conversion is complete and returns 1
 
-
-
-  if (kalPitch < ANGLE_CENTER - ANGLE_BALANCE_SPAN || kalPitch > ANGLE_CENTER + ANGLE_BALANCE_SPAN) {
+  if (kalPitch < Setpoint_angle - ANGLE_BALANCE_SPAN || kalPitch > Setpoint_angle + ANGLE_BALANCE_SPAN) {
     enable_balancing = false;
   }
 
   if (enable_balancing) {
-    Setpoint_angle = ANGLE_CENTER;
     Input_angle = kalPitch;
     motor_right_setpoint_speed = Output_motor_speed;
     motor_left_setpoint_speed = Output_motor_speed;
@@ -164,7 +180,7 @@ void loop() {
     motors_stop();
   }
 
-  if (now - serial_timer > SERIAL_INTERVAL) {
+  if ((now - serial_timer > SERIAL_INTERVAL) and !disable_serial) {
     serial_timer = now;
     serial_data();
   }
@@ -172,7 +188,7 @@ void loop() {
 
 void serial_data() {
   Serial.print("E:");
-  Serial.print(kalPitch - ANGLE_CENTER);
+  Serial.print(kalPitch - Setpoint_angle);
   Serial.print(",");
   Serial.print("Out_spd:");
   Serial.print(motor_right_setpoint_speed);
@@ -180,127 +196,5 @@ void serial_data() {
   Serial.println();
 }
 
-void read_gyro_kalman() {
-  Vector acc = mpu.readNormalizeAccel();
-  Vector gyr = mpu.readNormalizeGyro();
 
-  // Kalukacja Pitch &amp; Roll z akcelerometru
-  accPitch = -(atan2(acc.XAxis, sqrt(acc.YAxis * acc.YAxis + acc.ZAxis * acc.ZAxis)) * 180.0) / M_PI;
-  accRoll = (atan2(acc.YAxis, acc.ZAxis) * 180.0) / M_PI;
 
-  // Kalman - dane z akcelerometru i zyroskopu
-  kalPitch = kalmanY.update(accPitch, gyr.YAxis);
-  kalRoll = kalmanX.update(accRoll, gyr.XAxis);
-}
-
-void encoder_left_init() {
-  dir_left = true;  //default -> Forward
-  pinMode(encoder_L_pinB, INPUT);
-  attachInterrupt(digitalPinToInterrupt(encoder_L_pinA), wheel_left_pulse_count, CHANGE);
-}
-
-void encoder_right_init() {
-  dir_right = true;  //default -> Forward
-  pinMode(encoder_R_pinB, INPUT);
-  attachInterrupt(digitalPinToInterrupt(encoder_R_pinA), wheel_right_pulse_count, CHANGE);
-}
-
-void wheel_left_pulse_count() {
-  bool Lstate = digitalRead(encoder_L_pinA);
-  if ((encoder_L_PinALast == LOW) && Lstate == HIGH) {
-    bool val = digitalRead(encoder_L_pinB);
-    if (val == LOW && dir_left) {
-      dir_left = false;  //Reverse
-    } else if (val == HIGH && !dir_left) {
-      dir_left = true;  //Forward
-    }
-  }
-  encoder_L_PinALast = Lstate;
-
-  if (!dir_left) pulses_left--;
-  else pulses_left++;
-}
-
-void wheel_right_pulse_count() {
-  int Rstate = digitalRead(encoder_R_pinA);
-  if ((encoder_R_PinALast == LOW) && Rstate == HIGH) {
-    bool val = digitalRead(encoder_R_pinB);
-    if (val == LOW && dir_right) {
-      dir_right = false;  //Reverse
-    } else if (val == HIGH && !dir_right) {
-      dir_right = true;  //Forward
-    }
-  }
-  encoder_R_PinALast = Rstate;
-
-  if (!dir_right) pulses_right--;
-  else pulses_right++;
-}
-
-void motor_right_go()  //Motor Forward
-{
-  if (motor_right_pwm > 0) {
-    digitalWrite(Motor_R_DIR_pin, LOW);
-    analogWrite(Motor_R_PWM_pin, (uint8_t)motor_right_pwm + MOTORS_DEAD_ZONE);
-  } else {
-    digitalWrite(Motor_R_DIR_pin, HIGH);
-    analogWrite(Motor_R_PWM_pin, (uint8_t)abs(motor_right_pwm) + MOTORS_DEAD_ZONE);
-  }
-}
-
-void motor_left_go()  //Motor Forward
-{
-  if (motor_left_pwm > 0) {
-    digitalWrite(Motor_L_DIR_pin, LOW);
-    analogWrite(Motor_L_PWM_pin, motor_left_pwm + MOTORS_DEAD_ZONE);
-  } else {
-    digitalWrite(Motor_L_DIR_pin, HIGH);
-    analogWrite(Motor_L_PWM_pin, abs(motor_left_pwm) + MOTORS_DEAD_ZONE);
-  }
-}
-
-void motors_stop() {
-  analogWrite(Motor_L_PWM_pin, 0);
-  analogWrite(Motor_R_PWM_pin, 0);
-}
-
-void keyboard_read() {
-  adc_key_in = analogRead(7);
-  key = get_key(adc_key_in);  //Call the button judging function.
-
-  if (key != oldkey) {  // Get the button pressed
-    delay(50);
-    adc_key_in = analogRead(7);
-    key = get_key(adc_key_in);
-    if (key != oldkey) {
-      oldkey = key;
-      if (key >= 0) {
-        digitalWrite(13, HIGH);
-        switch (key) {  // Send messages accordingly.
-          case 0:
-            break;
-          case 1:
-            enable_balancing = !enable_balancing;
-            break;
-          case 2:
-            break;
-          case 3:
-            break;
-          case 4:
-            break;
-        }
-      }
-    }
-  }
-}
-
-int get_key(unsigned int input) {
-  int k;
-  for (k = 0; k < NUM_KEYS; k++) {
-    if (input < adc_key_val[k]) {  // Get the button pressed
-      return k;
-    }
-  }
-  if (k >= NUM_KEYS) k = -1;  // No button is pressed.
-  return k;
-}
