@@ -5,11 +5,14 @@
 #include <EEPROM.h>
 
 #define DOUBLE_SIZEOF 4
+#define UINT8_T_SIZEOF 2
 
 #define ADDR_P 0
 #define ADDR_I (DOUBLE_SIZEOF * 1)
 #define ADDR_D (DOUBLE_SIZEOF * 2)
 #define ADDR_ANGLE (DOUBLE_SIZEOF * 3)
+#define ADDR_VELOCITY_LIMIT_MIN (ADDR_ANGLE + UINT8_T_SIZEOF)
+#define ADDR_VELOCITY_LIMIT_MAX (ADDR_VELOCITY_LIMIT_MIN + UINT8_T_SIZEOF)
 
 #define encoder_L_pinA 2  //A pin -> the interrupt pin 0
 #define encoder_L_pinB 8  //B pin -> the digital pin 3
@@ -27,7 +30,7 @@
 #define MOTORS_MAX_PWM (255 - MOTORS_DEAD_ZONE)
 
 #define GYRO_INTERVAL 1
-#define SERIAL_INTERVAL 20
+#define SERIAL_INTERVAL 50
 
 #define ANGLE_BALANCE_SPAN 16.0
 
@@ -61,6 +64,7 @@ bool motor_test_run = false;
 
 // PID
 double Setpoint_angle, Input_angle, Output_motor_speed;
+uint8_t Velocity_limit_min, Velocity_limit_max;
 
 double Kp_balancing = 1,
        Ki_balancing = 100,
@@ -100,6 +104,8 @@ void setup() {
   EEPROM.get(ADDR_I, Ki_balancing);
   EEPROM.get(ADDR_D, Kd_balancing);
   EEPROM.get(ADDR_ANGLE, Setpoint_angle);
+  EEPROM.get(ADDR_VELOCITY_LIMIT_MIN, Velocity_limit_min);
+  EEPROM.get(ADDR_VELOCITY_LIMIT_MAX, Velocity_limit_max);
 
   // GYRO
   // Inicjalizacja MPU6050
@@ -133,7 +139,7 @@ void setup() {
 
   balancePID.SetMode(AUTOMATIC);                           //PID is set to automatic mode
   balancePID.SetSampleTime(PID_BALANCING_SAMPLE_TIME_MS);  //Set PID sampling frequency is 100ms
-  balancePID.SetOutputLimits(-150, 150);
+  balancePID.SetOutputLimits(-Velocity_limit_min, Velocity_limit_max);
 }
 
 void loop() {
