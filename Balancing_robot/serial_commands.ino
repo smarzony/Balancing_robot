@@ -1,73 +1,117 @@
 #define MAX_ARGUMENTS 3
 
-void commandEngine()
-{
+void commandEngine() {
   if (Serial.available() > 0) {
     String command = Serial.readStringUntil('\n'); // Odczytaj dane z portu szeregowego do momentu napotkania znaku nowej linii
 
-    // Podziel komendę na poszczególne argumenty
-    String arguments[MAX_ARGUMENTS];
-    int numArguments = splitCommand(command, arguments);
+    Serial.print("Otrzymano komendę: ");
+    Serial.println(command);
 
-    if (numArguments > 0) {
-      char functionCode = arguments[0].charAt(0); // Pierwszy znak komendy
-
-      // Wykonaj odpowiednią funkcję na podstawie kodu funkcji i przekazanych argumentów
-      switch (functionCode) {
-        case 'P':
-          if (numArguments >= 2) {
-            float arg1 = arguments[1].toFloat();
-            functionP(arg1);
-          } else {
-            Serial.println("Za mało argumentów dla funkcji P!");
-          }
-          break;
-        case 'I':
-          if (numArguments >= 2) {
-            float arg1 = arguments[1].toFloat();
-            functionI(arg1);
-          } else {
-            Serial.println("Za mało argumentów dla funkcji I!");
-          }
-          break;
-        // Dodaj inne przypadki dla innych funkcji
-
-        default:
-          // Nieznana komenda, obsłuż błąd
-          Serial.println("Nieznana komenda!");
-          break;
+    if (command.startsWith("PRINT")) 
+    {
+      if (command.length() == 5 || command.length() == 6) {
+        functionPrint();
+      } else {
+        Serial.println("Nieznana komenda!");
       }
+    } 
+    else if (command.startsWith("BAL")) 
+    {
+      if (command.length() == 3 || command.length() == 4) {
+        functionBalanceEnable();
+      } 
+      else {
+        Serial.println("Nieznana komenda!");
+      }
+    } 
+    else if (command.startsWith("SERIAL")) 
+    {
+      if (command.length() == 6 || command.length() == 7) {
+        functionSerialEnable();
+      } 
+      else {
+        Serial.println("Nieznana komenda!");
+      }
+    } 
+    else if (command.startsWith("P ")) 
+    {
+      float arg = command.substring(2).toFloat();
+      functionP(arg);
+    } 
+    else if (command.startsWith("I ")) 
+    {
+      float arg = command.substring(2).toFloat();
+      functionI(arg);
+    }
+    else if (command.startsWith("D ")) 
+    {
+      float arg = command.substring(2).toFloat();
+      functionD(arg);
+    }
+    else if (command.startsWith("ANGLE ")) 
+    {
+      float arg = command.substring(6).toFloat();
+      functionAngle(arg);
+    }
+    else 
+    {
+      Serial.println("Nieznana komenda!");
     }
   }
 }
 
-// Funkcja do podziału komendy na poszczególne argumenty
-int splitCommand(String command, String arguments[]) {
-  int index = 0;
-  int startIndex = 0;
-  int endIndex = command.indexOf(' ');
-  while (endIndex != -1 && index < MAX_ARGUMENTS) {
-    arguments[index] = command.substring(startIndex, endIndex);
-    startIndex = endIndex + 1;
-    endIndex = command.indexOf(' ', startIndex);
-    index++;
-  }
-  if (index < MAX_ARGUMENTS) {
-    arguments[index] = command.substring(startIndex);
-    index++;
-  }
-  return index;
+void functionP(double arg) {
+  Kp_balancing = arg;
+  EEPROM.put(ADDR_P, arg);
+  Serial.print("P set to: ");
+  Serial.println(arg);
 }
 
-// Przykładowe funkcje P i I
-void functionP(float arg1) {
-  // Zaimplementuj funkcję P
-  Serial.print("Wywołano funkcję P z argumentem 1: ");
-  Serial.println(arg1);
+void functionI(double arg) {
+  Ki_balancing = arg;
+  EEPROM.put(ADDR_I, arg);
+  Serial.print("I set to: ");
+  Serial.println(arg);
 }
 
-void functionI(float arg1) {
-  // Zaimplementuj funkcję I
-  Serial.print("Wywołano funkcję I z argumentem 1: ");
-  Serial.println(arg1);
+void functionD(double arg) {
+  Kd_balancing = arg;
+  EEPROM.put(ADDR_D, arg);
+  Serial.print("D set to: ");
+  Serial.println(arg);
 }
+
+void functionAngle(float arg) {
+  Setpoint_angle = arg;
+  EEPROM.put(ADDR_ANGLE, arg);
+  // Dodaj kod obsługujący zapis parametru ANGLE
+  Serial.print("ANGLE set to: ");
+  Serial.println(arg);
+}
+
+void functionSerialEnable() {
+  disable_serial = !disable_serial;
+  Serial.print("disable_serial set to: ");
+  Serial.println(disable_serial);
+}
+
+void functionBalanceEnable() {
+  enable_balancing = !enable_balancing;
+  Serial.print("enable_balancing set to: ");
+  Serial.println(enable_balancing);
+}
+
+void functionPrint() {
+  // Wyświetl wszystkie parametry
+  Serial.print("PID value: ");
+  Serial.print(Kp_balancing);
+  Serial.print(" ");
+  Serial.print(Ki_balancing);
+  Serial.print(" ");
+  Serial.println(Kd_balancing);
+  Serial.print("ANGLE value: ");
+  Serial.println(Setpoint_angle);
+
+  // Dodaj inne parametry, jeśli są potrzebne
+}
+
