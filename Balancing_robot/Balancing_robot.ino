@@ -3,7 +3,6 @@
 #include <KalmanFilter.h>
 #include <PID_v1.h>
 #include <EEPROM.h>
-#include <CommandParser.h>  // https://github.com/Uberi/Arduino-CommandParser
 
 #define DOUBLE_SIZEOF 4
 
@@ -37,10 +36,6 @@
 #define PID_MOTORS_SAMPLE_TIME_MS 30
 #define SPEED_SETPOINT_LIMIT (4 * PID_MOTORS_SAMPLE_TIME_MS)
 
-
-typedef CommandParser<> MyCommandParser;
-
-MyCommandParser parser;
 
 bool encoder_L_PinALast, encoder_R_PinALast;
 double pulses_left, pulses_right;  //the number of the pulses
@@ -95,19 +90,11 @@ float accRoll = 0;
 float kalPitch = 0;
 float kalRoll = 0;
 
-
 unsigned long now, gyro_timer, serial_timer;
-
 
 void setup() {
   Serial.begin(115200);
   while (!Serial);
-  parser.registerCommand("P", "d", &cmd_P);
-  parser.registerCommand("I", "d", &cmd_I);  
-  parser.registerCommand("D", "d", &cmd_D);
-  parser.registerCommand("ANGLE", "d", &cmd_ANGLE);
-  parser.registerCommand("PRINT", "", &cmd_print);
-  parser.registerCommand("SERIAL", "", &cmd_switch_serial);
 
   EEPROM.get(ADDR_P, Kp_balancing);
   EEPROM.get(ADDR_I, Ki_balancing);
@@ -152,7 +139,7 @@ void setup() {
 void loop() {
   now = millis();
   keyboard_read();
-  CommandsSerial();
+  commandEngine();
   if (now - gyro_timer > GYRO_INTERVAL) {
     gyro_timer = now;
     read_gyro_kalman();
@@ -195,6 +182,3 @@ void serial_data() {
   Serial.print(",");
   Serial.println();
 }
-
-
-
