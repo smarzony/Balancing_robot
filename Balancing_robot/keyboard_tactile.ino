@@ -18,6 +18,7 @@ void keyboard_read() {
             enable_balancing = !enable_balancing;
             break;
           case 2:
+            functionAngleCurrent();
             break;
           case 3:
             break;

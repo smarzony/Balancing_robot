@@ -44,23 +44,34 @@ void wheel_right_pulse_count() {
 
 void motor_right_go()  //Motor Forward
 {
+  int val = abs(motor_right_pwm) + MOTORS_DEAD_ZONE;
+  if (val > 255)
+    val = 255;
+
   if (motor_right_pwm > 0) {
-    digitalWrite(Motor_R_DIR_pin, LOW);
-    analogWrite(Motor_R_PWM_pin, (uint8_t)motor_right_pwm + MOTORS_DEAD_ZONE);
+    digitalWrite(Motor_R_DIR_pin, LOW);    
+    analogWrite(Motor_R_PWM_pin, val);
   } else {
     digitalWrite(Motor_R_DIR_pin, HIGH);
-    analogWrite(Motor_R_PWM_pin, (uint8_t)abs(motor_right_pwm) + MOTORS_DEAD_ZONE);
+    analogWrite(Motor_R_PWM_pin, val);
   }
 }
 
 void motor_left_go()  //Motor Forward
 {
+  int val = abs(motor_left_pwm) + MOTORS_DEAD_ZONE;
+  if (val > 255)
+    val = 255;
+  
+  if (val < MOTORS_DEAD_ZONE)
+    val = MOTORS_DEAD_ZONE;
+
   if (motor_left_pwm > 0) {
     digitalWrite(Motor_L_DIR_pin, LOW);
-    analogWrite(Motor_L_PWM_pin, motor_left_pwm + MOTORS_DEAD_ZONE);
+    analogWrite(Motor_L_PWM_pin, val);
   } else {
     digitalWrite(Motor_L_DIR_pin, HIGH);
-    analogWrite(Motor_L_PWM_pin, abs(motor_left_pwm) + MOTORS_DEAD_ZONE);
+    analogWrite(Motor_L_PWM_pin, val);
   }
 }
 
