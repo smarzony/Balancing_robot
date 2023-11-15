@@ -49,10 +49,12 @@ void motor_right_go()  //Motor Forward
     val = 255;
 
   if (motor_right_pwm > 0) {
-    digitalWrite(Motor_R_DIR_pin, LOW);    
+    digitalWrite(Motor_R_DIR_1_pin, LOW);    
+    digitalWrite(Motor_R_DIR_2_pin, HIGH);    
     analogWrite(Motor_R_PWM_pin, val);
   } else {
-    digitalWrite(Motor_R_DIR_pin, HIGH);
+    digitalWrite(Motor_R_DIR_1_pin, HIGH);
+    digitalWrite(Motor_R_DIR_2_pin, LOW);
     analogWrite(Motor_R_PWM_pin, val);
   }
 }
@@ -67,15 +69,19 @@ void motor_left_go()  //Motor Forward
     val = MOTORS_DEAD_ZONE;
 
   if (motor_left_pwm > 0) {
-    digitalWrite(Motor_L_DIR_pin, LOW);
+    digitalWrite(Motor_L_DIR_1_pin, LOW);
+    digitalWrite(Motor_L_DIR_2_pin, HIGH);
     analogWrite(Motor_L_PWM_pin, val);
   } else {
-    digitalWrite(Motor_L_DIR_pin, HIGH);
+    digitalWrite(Motor_L_DIR_1_pin, HIGH);
+    digitalWrite(Motor_L_DIR_2_pin, LOW);
     analogWrite(Motor_L_PWM_pin, val);
   }
 }
 
 void motors_stop() {
-  analogWrite(Motor_L_PWM_pin, 0);
-  analogWrite(Motor_R_PWM_pin, 0);
+    digitalWrite(Motor_L_DIR_1_pin, LOW);
+    digitalWrite(Motor_L_DIR_2_pin, LOW);
+    digitalWrite(Motor_R_DIR_1_pin, LOW);
+    digitalWrite(Motor_R_DIR_2_pin, LOW);
 }

@@ -20,17 +20,19 @@
 #define encoder_R_pinA 3  //A pin -> the interrupt pin 0
 #define encoder_R_pinB 9  //B pin -> the digital pin 3
 
-#define Motor_L_DIR_pin 4
+#define Motor_L_DIR_1_pin A3
+#define Motor_L_DIR_2_pin A2
 #define Motor_L_PWM_pin 5
 
+#define Motor_R_DIR_1_pin A1
+#define Motor_R_DIR_2_pin A0
 #define Motor_R_PWM_pin 6
-#define Motor_R_DIR_pin 7
 
 #define MOTORS_DEAD_ZONE 45
 
-#define MOTORS_MAX_PWM (255 - MOTORS_DEAD_ZONE)
+#define MOTORS_MAX_PWM 200
 
-#define GYRO_INTERVAL 1
+#define GYRO_INTERVAL 5
 #define SERIAL_INTERVAL 50
 
 #define PID_BALANCING_SAMPLE_TIME_MS 50 // originally 50 ms
@@ -76,15 +78,11 @@ double Kp_motors = 5,
        Ki_motors = 8,
        Kd_motors = 0.2;
 
-
-
 PID motor_right_pid(&pulses_right, &motor_right_pwm, &motor_right_setpoint_speed, Kp_motors, Ki_motors, Kd_motors, REVERSE);
 PID motor_left_pid(&pulses_left, &motor_left_pwm, &motor_left_setpoint_speed, Kp_motors, Ki_motors, Kd_motors, REVERSE);
 
 PID balancePID(&Input_angle, &Output_motor_speed, &Setpoint_angle, Kp_balancing, Ki_balancing, Kd_balancing, DIRECT);
 // PID balancePID(&Input_angle, &motor_left_pwm, &Setpoint_angle, Kp_balancing, Ki_balancing, Kd_balancing, REVERSE);
-
-
 
 // GYRO & KALMAN
 MPU6050 mpu;
@@ -118,6 +116,8 @@ void setup() {
 
   balancePID.SetTunings(Kp_balancing, Ki_balancing, Kd_balancing);
   balancePID.SetOutputLimits(-Velocity_limit_min, Velocity_limit_max);
+  motor_right_pid.SetOutputLimits(-MOTORS_MAX_PWM, MOTORS_MAX_PWM);
+  motor_left_pid.SetOutputLimits(-MOTORS_MAX_PWM, MOTORS_MAX_PWM);
 
   // GYRO
   // Inicjalizacja MPU6050
@@ -130,9 +130,12 @@ void setup() {
   // Kalibracja zyroskopu
   mpu.calibrateGyro();
 
-  pinMode(Motor_R_DIR_pin, OUTPUT);  //L298P Control port settings DC motor driver board for the output mode
+  pinMode(Motor_R_DIR_1_pin, OUTPUT);
+  pinMode(Motor_R_DIR_2_pin, OUTPUT);
   pinMode(Motor_R_PWM_pin, OUTPUT);
-  pinMode(Motor_L_DIR_pin, OUTPUT);  //L298P Control port settings DC motor driver board for the output mode
+
+  pinMode(Motor_L_DIR_1_pin, OUTPUT);
+  pinMode(Motor_L_DIR_2_pin, OUTPUT);
   pinMode(Motor_L_PWM_pin, OUTPUT);
 
   motor_right_setpoint_speed = 0;
@@ -175,10 +178,11 @@ void loop() {
   if (enable_balancing) {
     manual_go = false;
     Input_angle = kalPitch;
+    // Input_angle = Setpoint_angle-5;
     motor_right_setpoint_speed = Output_motor_speed;
     motor_left_setpoint_speed = Output_motor_speed;
     balancePID.Compute();
-    motor_right_pwm = motor_left_pwm;
+    //motor_right_pwm = motor_left_pwm;
     motor_left_go();   //Motor Forward
     motor_right_go();  //Motor Forward
 
